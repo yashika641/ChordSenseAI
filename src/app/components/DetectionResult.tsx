@@ -1,3 +1,4 @@
+import React, { JSX } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -6,15 +7,16 @@ interface DetectionResultProps {
   detectedNotes: string[];
 }
 
-export function DetectionResult({ isCorrect, detectedNotes }: DetectionResultProps) {
+export function DetectionResult(
+  { isCorrect, detectedNotes }: DetectionResultProps
+): JSX.Element {
+
   if (isCorrect === null) {
     return (
       <div className="w-full max-w-2xl mx-auto">
-        <div 
+        <div
           className="backdrop-blur-lg rounded-2xl p-8 shadow-xl border border-white/30 text-center"
-          style={{ 
-            background: 'rgba(255, 255, 255, 0.3)',
-          }}
+          style={{ background: 'rgba(255, 255, 255, 0.3)' }}
         >
           <p style={{ color: '#8B5A3C' }}>
             Play a chord to see the results
@@ -25,16 +27,16 @@ export function DetectionResult({ isCorrect, detectedNotes }: DetectionResultPro
   }
 
   return (
-    <motion.div 
+    <motion.div
       className="w-full max-w-2xl mx-auto"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <div 
+      <div
         className="backdrop-blur-lg rounded-2xl p-8 shadow-2xl border-2"
-        style={{ 
-          background: isCorrect 
+        style={{
+          background: isCorrect
             ? 'rgba(74, 222, 128, 0.15)'
             : 'rgba(239, 68, 68, 0.15)',
           borderColor: isCorrect ? '#4ADE80' : '#EF4444',
@@ -62,7 +64,7 @@ export function DetectionResult({ isCorrect, detectedNotes }: DetectionResultPro
           <p className="mb-4" style={{ color: '#8B5A3C' }}>
             Detected Notes:
           </p>
-          
+
           <div className="flex flex-wrap justify-center gap-2">
             {detectedNotes.map((note, index) => (
               <motion.span
