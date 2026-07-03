@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Mic, Upload } from 'lucide-react';
+import { Mic, Upload, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface RecordingCardProps {
@@ -7,8 +7,13 @@ interface RecordingCardProps {
 }
 
 export function RecordingCard({ onResult }: RecordingCardProps) {
+
   const [isRecording, setIsRecording] = useState(false);
   const [timer, setTimer] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  // 🔥 Store result locally (so UI always shows)
+  const [result, setResult] = useState<any>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -18,6 +23,9 @@ export function RecordingCard({ onResult }: RecordingCardProps) {
   // MIC RECORDING
   // ----------------------------
   const startRecording = async () => {
+
+    console.log("Starting recording...");
+
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const mediaRecorder = new MediaRecorder(stream);
 
@@ -51,8 +59,11 @@ export function RecordingCard({ onResult }: RecordingCardProps) {
     setIsRecording(false);
 
     mediaRecorderRef.current.onstop = async () => {
+
+      console.log("Recording stopped");
+
       const audioBlob = new Blob(audioChunksRef.current, {
-        type: 'audio/wav',
+        type: 'audio/webm',
       });
 
       await sendToBackend(audioBlob);
@@ -81,31 +92,40 @@ export function RecordingCard({ onResult }: RecordingCardProps) {
   // API CALL
   // ----------------------------
   const sendToBackend = async (audioBlob: Blob | File) => {
-  const formData = new FormData();
-  formData.append('file', audioBlob, 'audio.wav');
 
-  console.log("Sending request to backend..."); // 👈 ADD
+    console.log("Sending request to backend...");
+    setLoading(true);
 
-  try {
-    const response = await fetch(
-      'http://localhost:8000/detect-chord',
-      {
-        method: 'POST',
-        body: formData,
-      }
-    );
+    const formData = new FormData();
+    formData.append('file', audioBlob);
 
-    const result = await response.json();
+    try {
+      const response = await fetch(
+        'http://127.0.0.1:8000/detect-chord',
+        {
+          method: 'POST',
+          body: formData,
+        }
+      );
 
-    console.log('Detection Result:', result);
+      console.log("Response status:", response.status);
 
-    if (onResult) onResult(result);
+      const data = await response.json();
 
-  } catch (error) {
-    console.error('Backend error:', error);
-  }
-};
+      console.log('Detection Result:', data);
 
+      // 🔥 Store locally
+      setResult(data);
+
+      // 🔥 Send to parent if exists
+      if (onResult) onResult(data);
+
+    } catch (error) {
+      console.error('Backend error:', error);
+    }
+
+    setLoading(false);
+  };
 
   // ----------------------------
   // UI
@@ -118,22 +138,28 @@ export function RecordingCard({ onResult }: RecordingCardProps) {
 
   return (
     <div className="relative w-full max-w-md mx-auto">
+
+      {/* ================= CARD ================= */}
       <div
         className="backdrop-blur-lg rounded-3xl p-12 shadow-2xl border border-white/30"
         style={{ background: 'rgba(255, 255, 255, 0.4)' }}
       >
         <div className="flex flex-col items-center gap-6">
 
-          {/* 🎤 MIC BUTTON */}
+          {/* 🎤 MIC */}
           <motion.button
             onClick={toggleRecording}
             className="relative w-32 h-32 rounded-full bg-gradient-to-br from-[#FF8C42] to-[#FFAD60] shadow-xl flex items-center justify-center"
             whileTap={{ scale: 0.95 }}
           >
-            <Mic className="w-12 h-12 text-white" />
+            {loading ? (
+              <Loader2 className="w-10 h-10 text-white animate-spin" />
+            ) : (
+              <Mic className="w-12 h-12 text-white" />
+            )}
           </motion.button>
 
-          {/* 📂 UPLOAD BUTTON */}
+          {/* 📂 UPLOAD */}
           <motion.button
             onClick={triggerFileSelect}
             className="flex items-center gap-2 px-6 py-3 rounded-full shadow-md"
@@ -141,14 +167,11 @@ export function RecordingCard({ onResult }: RecordingCardProps) {
               background: 'rgba(255,255,255,0.7)',
               color: '#3D2817',
             }}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
           >
             <Upload className="w-5 h-5" />
             Upload Audio
           </motion.button>
 
-          {/* Hidden file input */}
           <input
             ref={fileInputRef}
             type="file"
@@ -157,25 +180,49 @@ export function RecordingCard({ onResult }: RecordingCardProps) {
             style={{ display: 'none' }}
           />
 
-          {/* Recording status */}
+          {/* Status */}
           <div className="text-center">
-            <p className="mb-2" style={{ color: '#3D2817' }}>
+            <p style={{ color: '#3D2817' }}>
               {isRecording
                 ? 'Recording...'
+                : loading
+                ? 'Processing...'
                 : 'Record or upload a chord'}
             </p>
 
             {isRecording && (
-              <motion.p
-                className="text-3xl"
-                style={{ color: '#FF8C42' }}
-              >
+              <motion.p className="text-3xl text-orange-500">
                 {formatTimer(timer)}
               </motion.p>
             )}
           </div>
+
         </div>
       </div>
+
+      {/* ================= RESULT PREVIEW ================= */}
+      {result && (
+        <div className="mt-6 p-4 bg-white/70 rounded-xl text-[#3D2817] text-sm shadow">
+
+          <p className="font-semibold mb-2">
+            Instrument: {result.instrument_detected?.[0]}
+          </p>
+
+          <p className="mb-2">
+            Confidence: {(result.instrument_detected?.[1] * 100).toFixed(1)}%
+          </p>
+
+          <p className="font-semibold mb-1">Chords:</p>
+
+          {result.chord_timeline?.map((c: any, i: number) => (
+            <div key={i}>
+              {c.start.toFixed(2)}s → {c.chord}
+            </div>
+          ))}
+
+        </div>
+      )}
+
     </div>
   );
 }
